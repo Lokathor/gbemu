@@ -74,10 +74,10 @@ fn do_json_test(file: &str) {
     assert_eq!(cpu.f(), case.r#final.f, "f");
     assert_eq!(cpu.h(), case.r#final.h, "h");
     assert_eq!(cpu.l(), case.r#final.l, "l");
-    assert_eq!(cpu.pc() - 1, case.r#final.pc, "pc"); // fudge!
+    assert_eq!(cpu.pc().wrapping_sub(1), case.r#final.pc, "pc"); // fudge!
     assert_eq!(cpu.sp(), case.r#final.sp, "sp");
     for (k, v) in case.r#final.ram.iter().copied() {
-      assert_eq!(ram[k as usize], v);
+      assert_eq!(ram[k as usize], v, "ram");
     }
   }
 }
@@ -115,4 +115,292 @@ fn test_op_code_0x05() {
 #[test]
 fn test_op_code_0x06() {
   do_json_test("tests_jsmoo/06.json");
+}
+
+#[test]
+fn test_op_code_0x07() {
+  do_json_test("tests_jsmoo/07.json");
+}
+
+#[test]
+fn test_op_code_0x08() {
+  do_json_test("tests_jsmoo/08.json");
+}
+
+#[test]
+fn test_op_code_0x09() {
+  do_json_test("tests_jsmoo/09.json");
+}
+
+#[test]
+fn test_op_code_0x0a() {
+  do_json_test("tests_jsmoo/0a.json");
+}
+
+#[test]
+fn test_op_code_0x0b() {
+  do_json_test("tests_jsmoo/0b.json");
+}
+
+#[test]
+fn test_op_code_0x0c() {
+  do_json_test("tests_jsmoo/0c.json");
+}
+
+#[test]
+fn test_op_code_0x0d() {
+  do_json_test("tests_jsmoo/0d.json");
+}
+
+#[test]
+fn test_op_code_0x0e() {
+  do_json_test("tests_jsmoo/0e.json");
+}
+
+#[test]
+fn test_op_code_0x0f() {
+  do_json_test("tests_jsmoo/0f.json");
+}
+
+#[test]
+#[cfg(FALSE)]
+// TODO: some day we should implement STOP for real.
+fn test_op_code_0x10() {
+  do_json_test("tests_jsmoo/10.json");
+}
+
+#[test]
+fn test_op_code_0x11() {
+  do_json_test("tests_jsmoo/11.json");
+}
+
+#[test]
+fn test_op_code_0x12() {
+  do_json_test("tests_jsmoo/12.json");
+}
+
+#[test]
+fn test_op_code_0x13() {
+  do_json_test("tests_jsmoo/13.json");
+}
+
+#[test]
+fn test_op_code_0x14() {
+  do_json_test("tests_jsmoo/14.json");
+}
+
+#[test]
+fn test_op_code_0x15() {
+  do_json_test("tests_jsmoo/15.json");
+}
+
+#[test]
+fn test_op_code_0x16() {
+  do_json_test("tests_jsmoo/16.json");
+}
+
+#[test]
+fn test_op_code_0x17() {
+  do_json_test("tests_jsmoo/17.json");
+}
+
+#[test]
+fn test_op_code_0x18() {
+  do_json_test("tests_jsmoo/18.json");
+}
+
+#[test]
+fn test_op_code_0x19() {
+  do_json_test("tests_jsmoo/19.json");
+}
+
+#[test]
+fn test_op_code_0x1a() {
+  do_json_test("tests_jsmoo/1a.json");
+}
+
+#[test]
+fn test_op_code_0x1b() {
+  do_json_test("tests_jsmoo/1b.json");
+}
+
+#[test]
+fn test_op_code_0x1c() {
+  do_json_test("tests_jsmoo/1c.json");
+}
+
+#[test]
+fn test_op_code_0x1d() {
+  do_json_test("tests_jsmoo/1d.json");
+}
+
+#[test]
+fn test_op_code_0x1e() {
+  do_json_test("tests_jsmoo/1e.json");
+}
+
+#[test]
+fn test_op_code_0x1f() {
+  do_json_test("tests_jsmoo/1f.json");
+}
+
+#[test]
+fn test_op_code_0x20() {
+  do_json_test("tests_jsmoo/20.json");
+}
+
+#[test]
+fn test_op_code_0x21() {
+  do_json_test("tests_jsmoo/21.json");
+}
+
+#[test]
+fn test_op_code_0x22() {
+  do_json_test("tests_jsmoo/22.json");
+}
+
+#[test]
+fn test_op_code_0x23() {
+  do_json_test("tests_jsmoo/23.json");
+}
+
+#[test]
+fn test_op_code_0x24() {
+  do_json_test("tests_jsmoo/24.json");
+}
+
+#[test]
+fn test_op_code_0x25() {
+  do_json_test("tests_jsmoo/25.json");
+}
+
+#[test]
+fn test_op_code_0x26() {
+  do_json_test("tests_jsmoo/26.json");
+}
+
+#[test]
+#[cfg(FALSE)]
+fn test_op_code_0x27() {
+  do_json_test("tests_jsmoo/27.json");
+}
+
+#[test]
+fn test_op_code_0x28() {
+  do_json_test("tests_jsmoo/28.json");
+}
+
+#[test]
+fn test_op_code_0x29() {
+  do_json_test("tests_jsmoo/29.json");
+}
+
+#[test]
+fn test_op_code_0x2a() {
+  do_json_test("tests_jsmoo/2a.json");
+}
+
+#[test]
+fn test_op_code_0x2b() {
+  do_json_test("tests_jsmoo/2b.json");
+}
+
+#[test]
+fn test_op_code_0x2c() {
+  do_json_test("tests_jsmoo/2c.json");
+}
+
+#[test]
+fn test_op_code_0x2d() {
+  do_json_test("tests_jsmoo/2d.json");
+}
+
+#[test]
+fn test_op_code_0x2e() {
+  do_json_test("tests_jsmoo/2e.json");
+}
+
+#[test]
+fn test_op_code_0x2f() {
+  do_json_test("tests_jsmoo/2f.json");
+}
+
+#[test]
+fn test_op_code_0x30() {
+  do_json_test("tests_jsmoo/30.json");
+}
+
+#[test]
+fn test_op_code_0x31() {
+  do_json_test("tests_jsmoo/31.json");
+}
+
+#[test]
+fn test_op_code_0x32() {
+  do_json_test("tests_jsmoo/32.json");
+}
+
+#[test]
+fn test_op_code_0x33() {
+  do_json_test("tests_jsmoo/33.json");
+}
+
+#[test]
+fn test_op_code_0x34() {
+  do_json_test("tests_jsmoo/34.json");
+}
+
+#[test]
+fn test_op_code_0x35() {
+  do_json_test("tests_jsmoo/35.json");
+}
+
+#[test]
+fn test_op_code_0x36() {
+  do_json_test("tests_jsmoo/36.json");
+}
+
+#[test]
+fn test_op_code_0x37() {
+  do_json_test("tests_jsmoo/37.json");
+}
+
+#[test]
+fn test_op_code_0x38() {
+  do_json_test("tests_jsmoo/38.json");
+}
+
+#[test]
+fn test_op_code_0x39() {
+  do_json_test("tests_jsmoo/39.json");
+}
+
+#[test]
+fn test_op_code_0x3a() {
+  do_json_test("tests_jsmoo/3a.json");
+}
+
+#[test]
+fn test_op_code_0x3b() {
+  do_json_test("tests_jsmoo/3b.json");
+}
+
+#[test]
+fn test_op_code_0x3c() {
+  do_json_test("tests_jsmoo/3c.json");
+}
+
+#[test]
+fn test_op_code_0x3d() {
+  do_json_test("tests_jsmoo/3d.json");
+}
+
+#[test]
+fn test_op_code_0x3e() {
+  do_json_test("tests_jsmoo/3e.json");
+}
+
+#[test]
+fn test_op_code_0x3f() {
+  do_json_test("tests_jsmoo/3f.json");
 }
