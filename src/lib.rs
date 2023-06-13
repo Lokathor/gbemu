@@ -330,7 +330,28 @@ impl SM83 {
           self.queue.clear();
         }
       }
-      DecimalAdjustA => todo!(),
+      DecimalAdjustA => {
+        let a = self.a();
+        let sub = self.f_sub();
+        // step 1
+        if !sub && a >= 0x9A {
+          self.set_f_carry(true);
+        }
+        // step 2
+        if !sub && (a & 0xF) >= 0x0A {
+          self.set_f_half(true);
+        }
+        // step 3
+        let adj_h = if self.f_half() { 0x06 } else { 0 };
+        let adj_c = if self.f_carry() { 0x60 } else { 0 };
+        let adjustment = adj_h | adj_c;
+        // step 4
+        let new_a = if sub { a.wrapping_sub(adjustment) } else { a.wrapping_add(adjustment) };
+        // step 5
+        self.set_a(new_a);
+        self.set_f_zero(new_a == 0);
+        self.set_f_half(false);
+      }
       ComplimentA => {
         let a = self.a();
         let new_a = a ^ 0xFF;

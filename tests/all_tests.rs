@@ -280,7 +280,6 @@ fn test_op_code_0x26() {
 }
 
 #[test]
-#[cfg(FALSE)]
 fn test_op_code_0x27() {
   do_json_test("tests_jsmoo/27.json");
 }
