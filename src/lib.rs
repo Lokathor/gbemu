@@ -52,6 +52,7 @@ impl Default for SM83 {
 // get/set by enum value
 impl SM83 {
   #[inline]
+  #[cfg(target_endian = "little")]
   pub fn get_r8(&self, r8: Reg8, bus: &impl MemoryBus) -> u8 {
     match r8 {
       Reg8::A => bytemuck::bytes_of(&self.af)[1],
@@ -72,6 +73,7 @@ impl SM83 {
     }
   }
   #[inline]
+  #[cfg(target_endian = "little")]
   pub fn set_r8(&mut self, r8: Reg8, u: u8, bus: &mut impl MemoryBus) {
     match r8 {
       Reg8::A => bytemuck::bytes_of_mut(&mut self.af)[1] = u,
