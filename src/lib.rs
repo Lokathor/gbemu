@@ -51,45 +51,47 @@ impl Default for SM83 {
 }
 // get/set by enum value
 impl SM83 {
+  const HIGH: usize = cfg!(target_endian = "little") as usize;
+  const LOW: usize = (!cfg!(target_endian = "little")) as usize;
   #[inline]
-  #[cfg(target_endian = "little")]
   pub fn get_r8(&self, r8: Reg8, bus: &impl MemoryBus) -> u8 {
+    use bytemuck::bytes_of;
     match r8 {
-      Reg8::A => bytemuck::bytes_of(&self.af)[1],
-      Reg8::F => bytemuck::bytes_of(&self.af)[0],
-      Reg8::B => bytemuck::bytes_of(&self.bc)[1],
-      Reg8::C => bytemuck::bytes_of(&self.bc)[0],
-      Reg8::D => bytemuck::bytes_of(&self.de)[1],
-      Reg8::E => bytemuck::bytes_of(&self.de)[0],
-      Reg8::H => bytemuck::bytes_of(&self.hl)[1],
-      Reg8::L => bytemuck::bytes_of(&self.hl)[0],
-      Reg8::SPH => bytemuck::bytes_of(&self.sp)[1],
-      Reg8::SPL => bytemuck::bytes_of(&self.sp)[0],
-      Reg8::PCH => bytemuck::bytes_of(&self.pc)[1],
-      Reg8::PCL => bytemuck::bytes_of(&self.pc)[0],
-      Reg8::ImmH => bytemuck::bytes_of(&self.imm)[1],
-      Reg8::ImmL => bytemuck::bytes_of(&self.imm)[0],
+      Reg8::A => bytes_of(&self.af)[Self::HIGH],
+      Reg8::F => bytes_of(&self.af)[Self::LOW],
+      Reg8::B => bytes_of(&self.bc)[Self::HIGH],
+      Reg8::C => bytes_of(&self.bc)[Self::LOW],
+      Reg8::D => bytes_of(&self.de)[Self::HIGH],
+      Reg8::E => bytes_of(&self.de)[Self::LOW],
+      Reg8::H => bytes_of(&self.hl)[Self::HIGH],
+      Reg8::L => bytes_of(&self.hl)[Self::LOW],
+      Reg8::SPH => bytes_of(&self.sp)[Self::HIGH],
+      Reg8::SPL => bytes_of(&self.sp)[Self::LOW],
+      Reg8::PCH => bytes_of(&self.pc)[Self::HIGH],
+      Reg8::PCL => bytes_of(&self.pc)[Self::LOW],
+      Reg8::ImmH => bytes_of(&self.imm)[Self::HIGH],
+      Reg8::ImmL => bytes_of(&self.imm)[Self::LOW],
       Reg8::HLA => bus.read(self.hl),
     }
   }
   #[inline]
-  #[cfg(target_endian = "little")]
   pub fn set_r8(&mut self, r8: Reg8, u: u8, bus: &mut impl MemoryBus) {
+    use bytemuck::bytes_of_mut;
     match r8 {
-      Reg8::A => bytemuck::bytes_of_mut(&mut self.af)[1] = u,
-      Reg8::F => bytemuck::bytes_of_mut(&mut self.af)[0] = u,
-      Reg8::B => bytemuck::bytes_of_mut(&mut self.bc)[1] = u,
-      Reg8::C => bytemuck::bytes_of_mut(&mut self.bc)[0] = u,
-      Reg8::D => bytemuck::bytes_of_mut(&mut self.de)[1] = u,
-      Reg8::E => bytemuck::bytes_of_mut(&mut self.de)[0] = u,
-      Reg8::H => bytemuck::bytes_of_mut(&mut self.hl)[1] = u,
-      Reg8::L => bytemuck::bytes_of_mut(&mut self.hl)[0] = u,
-      Reg8::SPH => bytemuck::bytes_of_mut(&mut self.sp)[1] = u,
-      Reg8::SPL => bytemuck::bytes_of_mut(&mut self.sp)[0] = u,
-      Reg8::PCH => bytemuck::bytes_of_mut(&mut self.pc)[1] = u,
-      Reg8::PCL => bytemuck::bytes_of_mut(&mut self.pc)[0] = u,
-      Reg8::ImmH => bytemuck::bytes_of_mut(&mut self.imm)[1] = u,
-      Reg8::ImmL => bytemuck::bytes_of_mut(&mut self.imm)[0] = u,
+      Reg8::A => bytes_of_mut(&mut self.af)[Self::HIGH] = u,
+      Reg8::F => bytes_of_mut(&mut self.af)[Self::LOW] = u,
+      Reg8::B => bytes_of_mut(&mut self.bc)[Self::HIGH] = u,
+      Reg8::C => bytes_of_mut(&mut self.bc)[Self::LOW] = u,
+      Reg8::D => bytes_of_mut(&mut self.de)[Self::HIGH] = u,
+      Reg8::E => bytes_of_mut(&mut self.de)[Self::LOW] = u,
+      Reg8::H => bytes_of_mut(&mut self.hl)[Self::HIGH] = u,
+      Reg8::L => bytes_of_mut(&mut self.hl)[Self::LOW] = u,
+      Reg8::SPH => bytes_of_mut(&mut self.sp)[Self::HIGH] = u,
+      Reg8::SPL => bytes_of_mut(&mut self.sp)[Self::LOW] = u,
+      Reg8::PCH => bytes_of_mut(&mut self.pc)[Self::HIGH] = u,
+      Reg8::PCL => bytes_of_mut(&mut self.pc)[Self::LOW] = u,
+      Reg8::ImmH => bytes_of_mut(&mut self.imm)[Self::HIGH] = u,
+      Reg8::ImmL => bytes_of_mut(&mut self.imm)[Self::LOW] = u,
       Reg8::HLA => bus.write(self.hl, u),
     }
   }
@@ -402,6 +404,8 @@ pub enum Reg8 {
   ImmL,
   ImmH,
   /// Indicates the byte at the HL address
+  //#[cfg(FALSE)]
+  //TODO: delete this? I think it's always handled by Action list differences.
   HLA,
 }
 use Reg8::*;
