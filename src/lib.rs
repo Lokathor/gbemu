@@ -517,7 +517,7 @@ const fn Dec8(r8: Reg8) -> Action {
   Delta8(r8, -1)
 }
 
-static OP_TABLE: &[&[Action]] = &[
+static OP_TABLE: [&[Action]; 256] = [
   // 0x00 series
   &[Nop],                                                         /* NOP */
   &[RePC(C), RePC(B), Nop],                                       /* LD BC, n16 */
@@ -586,4 +586,208 @@ static OP_TABLE: &[&[Action]] = &[
   &[Dec8(A)],                                      /* DEC A */
   &[RePC(A), Nop],                                 /* LD A, n8 */
   &[ComplimentCarryFlag],                          /* CCF */
+  // 0x40 series
+  &[Nop], /* LD B, B */
+  &[Nop], /* LD B, C */
+  &[Nop], /* LD B, D */
+  &[Nop], /* LD B, E */
+  &[Nop], /* LD B, H */
+  &[Nop], /* LD B, L */
+  &[Nop], /* LD B, [HL] */
+  &[Nop], /* LD B, A */
+  &[Nop], /* LD C, B */
+  &[Nop], /* LD C, C */
+  &[Nop], /* LD C, D */
+  &[Nop], /* LD C, E */
+  &[Nop], /* LD C, H */
+  &[Nop], /* LD C, L */
+  &[Nop], /* LD C, [HL] */
+  &[Nop], /* LD C, A */
+  // 0x50 series
+  &[Nop], /* LD D, B */
+  &[Nop], /* LD D, C */
+  &[Nop], /* LD D, D */
+  &[Nop], /* LD D, E */
+  &[Nop], /* LD D, H */
+  &[Nop], /* LD D, L */
+  &[Nop], /* LD D, [HL] */
+  &[Nop], /* LD D, A */
+  &[Nop], /* LD E, B */
+  &[Nop], /* LD E, C */
+  &[Nop], /* LD E, D */
+  &[Nop], /* LD E, E */
+  &[Nop], /* LD E, H */
+  &[Nop], /* LD E, L */
+  &[Nop], /* LD E, [HL] */
+  &[Nop], /* LD E, A */
+  // 0x60 series
+  &[Nop], /* LD H, B */
+  &[Nop], /* LD H, C */
+  &[Nop], /* LD H, D */
+  &[Nop], /* LD H, E */
+  &[Nop], /* LD H, H */
+  &[Nop], /* LD H, L */
+  &[Nop], /* LD H, [HL] */
+  &[Nop], /* LD H, A */
+  &[Nop], /* LD L, B */
+  &[Nop], /* LD L, C */
+  &[Nop], /* LD L, D */
+  &[Nop], /* LD L, E */
+  &[Nop], /* LD L, H */
+  &[Nop], /* LD L, L */
+  &[Nop], /* LD L, [HL] */
+  &[Nop], /* LD L, A */
+  // 0x70 series
+  &[Nop], /* LD [HL], B */
+  &[Nop], /* LD [HL], C */
+  &[Nop], /* LD [HL], D */
+  &[Nop], /* LD [HL], E */
+  &[Nop], /* LD [HL], H */
+  &[Nop], /* LD [HL], L */
+  &[Nop], /* LD [HL], [HL] */
+  &[Nop], /* LD [HL], A */
+  &[Nop], /* LD A, B */
+  &[Nop], /* LD A, C */
+  &[Nop], /* LD A, D */
+  &[Nop], /* LD A, E */
+  &[Nop], /* LD A, H */
+  &[Nop], /* LD A, L */
+  &[Nop], /* LD A, [HL] */
+  &[Nop], /* LD A, A */
+  // 0x80 series
+  &[Nop], /* ADD A, B */
+  &[Nop], /* ADD A, C */
+  &[Nop], /* ADD A, D */
+  &[Nop], /* ADD A, E */
+  &[Nop], /* ADD A, H */
+  &[Nop], /* ADD A, L */
+  &[Nop], /* ADD A, [HL] */
+  &[Nop], /* ADD A, A */
+  &[Nop], /* ADC A, B */
+  &[Nop], /* ADC A, C */
+  &[Nop], /* ADC A, D */
+  &[Nop], /* ADC A, E */
+  &[Nop], /* ADC A, H */
+  &[Nop], /* ADC A, L */
+  &[Nop], /* ADC A, [HL] */
+  &[Nop], /* ADC A, A */
+  // 0x90 series
+  &[Nop], /* SUB B */
+  &[Nop], /* SUB C */
+  &[Nop], /* SUB D */
+  &[Nop], /* SUB E */
+  &[Nop], /* SUB H */
+  &[Nop], /* SUB L */
+  &[Nop], /* SUB [HL] */
+  &[Nop], /* SUB A */
+  &[Nop], /* SUB A, B */
+  &[Nop], /* SUB A, C */
+  &[Nop], /* SUB A, D */
+  &[Nop], /* SUB A, E */
+  &[Nop], /* SUB A, H */
+  &[Nop], /* SUB A, L */
+  &[Nop], /* SUB A, [HL] */
+  &[Nop], /* SUB A, A */
+  // 0xA0 series
+  &[Nop], /* AND B */
+  &[Nop], /* AND C */
+  &[Nop], /* AND D */
+  &[Nop], /* AND E */
+  &[Nop], /* AND H */
+  &[Nop], /* AND L */
+  &[Nop], /* AND [HL] */
+  &[Nop], /* AND A */
+  &[Nop], /* XOR B */
+  &[Nop], /* XOR C */
+  &[Nop], /* XOR D */
+  &[Nop], /* XOR E */
+  &[Nop], /* XOR H */
+  &[Nop], /* XOR L */
+  &[Nop], /* XOR [HL] */
+  &[Nop], /* XOR A */
+  // 0xB0 series
+  &[Nop], /* OR B */
+  &[Nop], /* OR C */
+  &[Nop], /* OR D */
+  &[Nop], /* OR E */
+  &[Nop], /* OR H */
+  &[Nop], /* OR L */
+  &[Nop], /* OR [HL] */
+  &[Nop], /* OR A */
+  &[Nop], /* CP B */
+  &[Nop], /* CP C */
+  &[Nop], /* CP D */
+  &[Nop], /* CP E */
+  &[Nop], /* CP H */
+  &[Nop], /* CP L */
+  &[Nop], /* CP [HL] */
+  &[Nop], /* CP A */
+  // 0xC0 series
+  &[Nop], /* RET NZ */
+  &[Nop], /* POP BC */
+  &[Nop], /* JP NZ, a16 */
+  &[Nop], /* JP a16 */
+  &[Nop], /* CALL NZ, a16 */
+  &[Nop], /* PUSH BC */
+  &[Nop], /* ADD A, n8 */
+  &[Nop], /* RST 00H */
+  &[Nop], /* RET Z */
+  &[Nop], /* RET */
+  &[Nop], /* JP Z, a16 */
+  &[Nop], /* CB Prefix */
+  &[Nop], /* Call Z, a16 */
+  &[Nop], /* CALL a16 */
+  &[Nop], /* ADC A, n8 */
+  &[Nop], /* RST 08H */
+  // 0xD0 series
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
+  // 0xE0 series
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
+  // 0xF0 series
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
+  &[Nop], /*  */
 ];
