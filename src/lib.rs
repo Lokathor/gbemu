@@ -471,69 +471,147 @@ impl SM83 {
       }
       SetIE(enabled) => self.set_irq_enabled(enabled),
       CompleteCB => {
-        let op = self.imm_l();
-        let val = match op & 0b111 {
+        let imm_l = self.imm_l();
+        println!("imm_l: {imm_l:02X}");
+        let val = match imm_l & 0b111 {
           0 => self.b(),
           1 => self.c(),
           2 => self.d(),
           3 => self.e(),
           4 => self.h(),
           5 => self.l(),
-          6 => bus.read(self.hl()),
+          6 => {
+            self.queue.extend([Nop].into_iter());
+            bus.read(self.hl())
+          }
           7 => self.a(),
           _ => unimplemented!(),
         };
-        let new_val = match op >> 3 {
-          0 => todo!("RLC"),
-          1 => todo!("RRC"),
-          2 => todo!("RL"),
-          3 => todo!("RR"),
-          4 => todo!("SLA"),
-          5 => todo!("SRA"),
-          6 => {
-            self.set_f_zero(val == 0);
-            val.rotate_left(4)
+        let mut needs_writeback = true;
+        let new_val = match dbg!(imm_l >> 3) {
+          0 => {
+            // RLC
+            let out = val.rotate_left(1);
+            self.set_f_zero(out == 0);
+            self.set_f_sub(false);
+            self.set_f_half(false);
+            self.set_f_carry((val as i8) < 0);
+            out
           }
-          7 => todo!("SRL"),
-          8..=15 => {
-            // bit test
-            let b = (op >> 3) - 8;
-            self.set_f_zero((val & (1 << b)) == 0);
+          1 => {
+            // RRC
+            let out = val.rotate_right(1);
+            self.set_f_zero(out == 0);
+            self.set_f_sub(false);
+            self.set_f_half(false);
+            self.set_f_carry((val & 1) != 0);
+            out
+          }
+          2 => {
+            // RL
+            let out = val << 1 | u8::from(self.f_carry());
+            self.set_f_zero(out == 0);
+            self.set_f_sub(false);
+            self.set_f_half(false);
+            self.set_f_carry((val as i8) < 0);
+            out
+          }
+          3 => {
+            // RR
+            let out = val >> 1 | u8::from(self.f_carry()) << 7;
+            self.set_f_zero(out == 0);
+            self.set_f_sub(false);
+            self.set_f_half(false);
+            self.set_f_carry((val & 1) != 0);
+            out
+          }
+          4 => {
+            // SLA
+            let out = val << 1;
+            self.set_f_zero(out == 0);
+            self.set_f_sub(false);
+            self.set_f_half(false);
+            self.set_f_carry((val as i8) < 0);
+            out
+          }
+          5 => {
+            // SRA
+            let out = ((val as i8) >> 1) as u8;
+            self.set_f_zero(out == 0);
+            self.set_f_sub(false);
+            self.set_f_half(false);
+            self.set_f_carry((val & 1) != 0);
+            out
+          }
+          6 => {
+            // SWAP
+            let out = val.rotate_left(4);
+            self.set_f_zero(out == 0);
+            self.set_f_sub(false);
+            self.set_f_half(false);
+            self.set_f_carry(false);
+            out
+          }
+          7 => {
+            // SRL
+            let out = val >> 1;
+            self.set_f_zero(out == 0);
+            self.set_f_sub(false);
+            self.set_f_half(false);
+            self.set_f_carry((val & 1) != 0);
+            out
+          }
+          x @ 8..=15 => {
+            // BIT
+            let bit = u32::from(x - 8);
+            self.set_f_zero(!u8_get_bit(bit, val));
             self.set_f_sub(false);
             self.set_f_half(true);
-            if op & 0b111 == 6 {
-              debug_assert!(self.queue.is_empty());
+            needs_writeback = false;
+            0
+          }
+          x @ 16..=23 => {
+            // RES
+            let bit = u32::from(x - 16);
+            u8_with_bit(bit, val, false)
+          }
+          x @ 24..=31 => {
+            // SET
+            let bit = u32::from(x - 24);
+            u8_with_bit(bit, val, true)
+          }
+          _ => unimplemented!(),
+        };
+        // write back when appropriate
+        if needs_writeback {
+          match imm_l & 0b111 {
+            0 => self.set_b(new_val),
+            1 => self.set_c(new_val),
+            2 => self.set_d(new_val),
+            3 => self.set_e(new_val),
+            4 => self.set_h(new_val),
+            5 => self.set_l(new_val),
+            6 => {
               self.queue.extend([Nop].into_iter());
+              bus.write(self.hl(), new_val)
             }
-            return;
-          }
-          16..=23 => {
-            // bit set
-            let b = (op >> 3) - 16;
-            bitfrob::u8_with_bit(1 << b, val, true)
-          }
-          24..=31 => {
-            // bit reset
-            let b = (op >> 3) - 24;
-            bitfrob::u8_with_bit(1 << b, val, false)
-          }
-          _ => unimplemented!(),
-        };
-        match op & 0b111 {
-          0 => self.set_b(new_val),
-          1 => self.set_c(new_val),
-          2 => self.set_d(new_val),
-          3 => self.set_e(new_val),
-          4 => self.set_h(new_val),
-          5 => self.set_l(new_val),
-          6 => {
-            bus.write(self.hl(), new_val);
-            debug_assert!(self.queue.is_empty());
-            self.queue.extend([Nop, Nop].into_iter());
-          }
-          7 => self.set_a(new_val),
-          _ => unimplemented!(),
-        };
+            7 => self.set_a(new_val),
+            _ => unimplemented!(),
+          };
+        }
+      }
+      DeltaSPTo(r16) => {
+        let sp = self.sp();
+        let spl = sp as u8;
+        let delta = self.imm_l() as i8;
+        let delta16 = delta as i16 as u16;
+        let new_r16 = sp.wrapping_add(delta16);
+        self.set_r16(r16, new_r16);
+        self.set_f_zero(false);
+        self.set_f_sub(false);
+        let out = spl.wrapping_add_signed(delta);
+        self.set_f_half(spl & 0xF > out & 0xF);
+        self.set_f_carry(out < spl);
       }
     }
 
@@ -687,8 +765,13 @@ pub enum Action {
   /// Sets IME to the magic value given.
   SetIE(bool),
 
+  /// Next use ImmL to complete a CB action
   CompleteCB,
+
+  /// (0 0 H C)
+  DeltaSPTo(Reg16),
 }
+use bitfrob::{u8_get_bit, u8_with_bit};
 use Action::*;
 /// `Read(r8, PC, 1)`, Read PC into a Reg8, then offset PC by 1.
 #[allow(bad_style)]
@@ -975,7 +1058,7 @@ static OP_TABLE: [&[Action]; 256] = [
   &[Dec16(SP), Write(SP, H, -1), Wr0(SP, L), Nop], /* PUSH HL */
   &[RePC(ImmL), And(ImmL)],                    /* AND n8 */
   &[Dec16(SP), Write(SP, PCH, -1), Wr0(SP, PCL), SetPC(0x20)], /* RST 20H */
-  &[Nop],                                      /* ADD SP, e8 */
+  &[RePC(ImmL), DeltaSPTo(SP), Nop, Nop],      /* ADD SP, e8 */
   &[MovePC(HL)],                               /* JP HL */
   &[RePC(ImmL), RePC(ImmH), Wr0(Imm, A), Nop], /* LD [a16], A */
   &[Nop],                                      /* Illegal */
@@ -992,7 +1075,7 @@ static OP_TABLE: [&[Action]; 256] = [
   &[Dec16(SP), Write(SP, A, -1), Wr0(SP, F), Nop], /* PUSH AF */
   &[RePC(ImmL), Or(ImmL)],                    /* OR n8 */
   &[Dec16(SP), Write(SP, PCH, -1), Wr0(SP, PCL), SetPC(0x30)], /* RST 30H */
-  &[Nop],                                     /* LD HL, SP+e8 */
+  &[RePC(ImmL), DeltaSPTo(HL), Nop],          /* LD HL, SP+e8 */
   &[Move(SPH, H), Move(SPL, L)],              /* LD SP, HL */
   &[RePC(ImmL), RePC(ImmH), Re0(A, Imm), Nop], /* LD A, [a16] */
   &[SetIE(true)],                             /* EI */
