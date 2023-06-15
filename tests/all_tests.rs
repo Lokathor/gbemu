@@ -34,8 +34,12 @@ fn do_json_test(file: &str) {
   //
   for case in cases {
     println!("Test Case: `{}`", case.name);
-    if case.initial.ime != case.r#final.ime || case.initial.ei != case.r#final.ei {
-      // TODO: figure out what ime/ei is once we're using a test that changes it.
+    if case.initial.ime != case.r#final.ime {
+      // TODO: handle IME tests
+      return;
+    }
+    if case.initial.ei != case.r#final.ei {
+      // TODO: handle EI tests
       return;
     }
 
