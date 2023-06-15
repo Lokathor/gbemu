@@ -470,6 +470,71 @@ impl SM83 {
         }
       }
       SetIE(enabled) => self.set_irq_enabled(enabled),
+      CompleteCB => {
+        let op = self.imm_l();
+        let val = match op & 0b111 {
+          0 => self.b(),
+          1 => self.c(),
+          2 => self.d(),
+          3 => self.e(),
+          4 => self.h(),
+          5 => self.l(),
+          6 => bus.read(self.hl()),
+          7 => self.a(),
+          _ => unimplemented!(),
+        };
+        let new_val = match op >> 3 {
+          0 => todo!("RLC"),
+          1 => todo!("RRC"),
+          2 => todo!("RL"),
+          3 => todo!("RR"),
+          4 => todo!("SLA"),
+          5 => todo!("SRA"),
+          6 => {
+            self.set_f_zero(val == 0);
+            val.rotate_left(4)
+          }
+          7 => todo!("SRL"),
+          8..=15 => {
+            // bit test
+            let b = (op >> 3) - 8;
+            self.set_f_zero((val & (1 << b)) == 0);
+            self.set_f_sub(false);
+            self.set_f_half(true);
+            if op & 0b111 == 6 {
+              debug_assert!(self.queue.is_empty());
+              self.queue.extend([Nop].into_iter());
+            }
+            return;
+          }
+          16..=23 => {
+            // bit set
+            let b = (op >> 3) - 16;
+            bitfrob::u8_with_bit(1 << b, val, true)
+          }
+          24..=31 => {
+            // bit reset
+            let b = (op >> 3) - 24;
+            bitfrob::u8_with_bit(1 << b, val, false)
+          }
+          _ => unimplemented!(),
+        };
+        match op & 0b111 {
+          0 => self.set_b(new_val),
+          1 => self.set_c(new_val),
+          2 => self.set_d(new_val),
+          3 => self.set_e(new_val),
+          4 => self.set_h(new_val),
+          5 => self.set_l(new_val),
+          6 => {
+            bus.write(self.hl(), new_val);
+            debug_assert!(self.queue.is_empty());
+            self.queue.extend([Nop, Nop].into_iter());
+          }
+          7 => self.set_a(new_val),
+          _ => unimplemented!(),
+        };
+      }
     }
 
     if self.queue.is_empty() {
@@ -621,6 +686,8 @@ pub enum Action {
 
   /// Sets IME to the magic value given.
   SetIE(bool),
+
+  CompleteCB,
 }
 use Action::*;
 /// `Read(r8, PC, 1)`, Read PC into a Reg8, then offset PC by 1.
@@ -877,7 +944,7 @@ static OP_TABLE: [&[Action]; 256] = [
   &[Nop, RetIf(Ze), Read(PCL, SP, 1), Read(PCH, SP, 1), Nop], /* RET Z */
   &[Read(PCL, SP, 1), Read(PCH, SP, 1), Nop, Nop],            /* RET */
   &[RePC(ImmL), RePC(ImmH), Jp(Ze), Nop],                     /* JP Z, a16 */
-  &[Nop],                                                     /* CB Prefix */
+  &[RePC(ImmL), CompleteCB],                                  /* CB Prefix */
   &[RePC(ImmL), RePC(ImmH), Call(Ze)],                        /* Call Z, a16 */
   &[RePC(ImmL), RePC(ImmH), Call(Al)],                        /* CALL a16 */
   &[RePC(ImmL), Add(ImmL, true)],                             /* ADC A, n8 */
