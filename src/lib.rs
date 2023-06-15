@@ -29,13 +29,14 @@ pub struct SM83 {
   pc: u16,
   imm: u16,
   queue: VecDeque<Action>,
+  irq_enabled: bool,
 }
 impl Default for SM83 {
   #[inline]
   fn default() -> Self {
     let mut queue = VecDeque::default();
     queue.extend([Nop].into_iter());
-    Self { af: 0, bc: 0, de: 0, hl: 0, sp: 0, pc: 0, imm: 0, queue }
+    Self { af: 0, bc: 0, de: 0, hl: 0, sp: 0, pc: 0, imm: 0, queue, irq_enabled: false }
   }
 }
 // get/set by enum value
@@ -117,6 +118,14 @@ impl SM83 {
       Cy => self.f_carry(),
       NC => !self.f_carry(),
     }
+  }
+  #[inline]
+  pub fn irq_enabled(&self) -> bool {
+    self.irq_enabled
+  }
+  #[inline]
+  pub fn set_irq_enabled(&mut self, irq_enabled: bool) {
+    self.irq_enabled = irq_enabled;
   }
 }
 // get/set per field
@@ -455,6 +464,12 @@ impl SM83 {
         }
       }
       SetPC(u) => self.set_pc(u16::from(u)),
+      RetIf(cond) => {
+        if !self.is_cond(cond) {
+          self.queue.clear()
+        }
+      }
+      SetIE(enabled) => self.set_irq_enabled(enabled),
     }
 
     if self.queue.is_empty() {
@@ -556,6 +571,10 @@ pub enum Action {
   /// * On a **failed** jump condition, flush the queue.
   Jp(Cond),
 
+  /// Conditional return
+  /// * On a **failed** condition, flush the queue.
+  RetIf(Cond),
+
   /// Call if the condition holds.
   /// * On Condition: subtract 1 from SP then queues the rest of the call
   ///   process
@@ -599,6 +618,9 @@ pub enum Action {
 
   /// Sets PC to the magic value given.
   SetPC(u8),
+
+  /// Sets IME to the magic value given.
+  SetIE(bool),
 }
 use Action::*;
 /// `Read(r8, PC, 1)`, Read PC into a Reg8, then offset PC by 1.
@@ -844,38 +866,38 @@ static OP_TABLE: [&[Action]; 256] = [
   &[Re0(ImmL, HL), Compare(ImmL)], /* CP [HL] */
   &[Compare(A)],                   /* CP A */
   // 0xC0 series
-  &[Nop],                                                      /* RET NZ */
-  &[Read(C, SP, 1), Read(B, SP, 1), Nop],                      /* POP BC */
-  &[RePC(ImmL), RePC(ImmH), Jp(NZ), Nop],                      /* JP NZ, a16 */
-  &[RePC(ImmL), RePC(ImmH), Jp(Al), Nop],                      /* JP a16 */
-  &[RePC(ImmL), RePC(ImmH), Call(NZ)],                         /* CALL NZ, a16 */
-  &[Dec16(SP), Write(SP, B, -1), Wr0(SP, C), Nop],             /* PUSH BC */
-  &[RePC(ImmL), Add(ImmL, false)],                             /* ADD A, n8 */
+  &[Nop, RetIf(NZ), Read(PCL, SP, 1), Read(PCH, SP, 1), Nop], /* RET NZ */
+  &[Read(C, SP, 1), Read(B, SP, 1), Nop],                     /* POP BC */
+  &[RePC(ImmL), RePC(ImmH), Jp(NZ), Nop],                     /* JP NZ, a16 */
+  &[RePC(ImmL), RePC(ImmH), Jp(Al), Nop],                     /* JP a16 */
+  &[RePC(ImmL), RePC(ImmH), Call(NZ)],                        /* CALL NZ, a16 */
+  &[Dec16(SP), Write(SP, B, -1), Wr0(SP, C), Nop],            /* PUSH BC */
+  &[RePC(ImmL), Add(ImmL, false)],                            /* ADD A, n8 */
   &[Dec16(SP), Write(SP, PCH, -1), Wr0(SP, PCL), SetPC(0x00)], /* RST 00H */
-  &[Nop],                                                      /* RET Z */
-  &[Nop],                                                      /* RET */
-  &[RePC(ImmL), RePC(ImmH), Jp(Ze), Nop],                      /* JP Z, a16 */
-  &[Nop],                                                      /* CB Prefix */
-  &[RePC(ImmL), RePC(ImmH), Call(Ze)],                         /* Call Z, a16 */
-  &[RePC(ImmL), RePC(ImmH), Call(Al)],                         /* CALL a16 */
-  &[RePC(ImmL), Add(ImmL, true)],                              /* ADC A, n8 */
+  &[Nop, RetIf(Ze), Read(PCL, SP, 1), Read(PCH, SP, 1), Nop], /* RET Z */
+  &[Read(PCL, SP, 1), Read(PCH, SP, 1), Nop, Nop],            /* RET */
+  &[RePC(ImmL), RePC(ImmH), Jp(Ze), Nop],                     /* JP Z, a16 */
+  &[Nop],                                                     /* CB Prefix */
+  &[RePC(ImmL), RePC(ImmH), Call(Ze)],                        /* Call Z, a16 */
+  &[RePC(ImmL), RePC(ImmH), Call(Al)],                        /* CALL a16 */
+  &[RePC(ImmL), Add(ImmL, true)],                             /* ADC A, n8 */
   &[Dec16(SP), Write(SP, PCH, -1), Wr0(SP, PCL), SetPC(0x08)], /* RST 08H */
   // 0xD0 series
-  &[Nop],                                                      /* RET NC */
-  &[Read(E, SP, 1), Read(D, SP, 1), Nop],                      /* POP DE */
-  &[RePC(ImmL), RePC(ImmH), Jp(NC), Nop],                      /* JP NC, a16 */
-  &[Nop],                                                      /* Illegal */
-  &[RePC(ImmL), RePC(ImmH), Call(NC)],                         /* CALL NC, a16 */
-  &[Dec16(SP), Write(SP, D, -1), Wr0(SP, E), Nop],             /* PUSH DE */
-  &[RePC(ImmL), Add(ImmL, false)],                             /* SUB n8 */
+  &[Nop, RetIf(NC), Read(PCL, SP, 1), Read(PCH, SP, 1), Nop], /* RET NC */
+  &[Read(E, SP, 1), Read(D, SP, 1), Nop],                     /* POP DE */
+  &[RePC(ImmL), RePC(ImmH), Jp(NC), Nop],                     /* JP NC, a16 */
+  &[Nop],                                                     /* Illegal */
+  &[RePC(ImmL), RePC(ImmH), Call(NC)],                        /* CALL NC, a16 */
+  &[Dec16(SP), Write(SP, D, -1), Wr0(SP, E), Nop],            /* PUSH DE */
+  &[RePC(ImmL), Sub(ImmL, false)],                            /* SUB n8 */
   &[Dec16(SP), Write(SP, PCH, -1), Wr0(SP, PCL), SetPC(0x10)], /* RST 10H */
-  &[Nop],                                                      /* RET C */
-  &[Nop],                                                      /* RETI */
-  &[RePC(ImmL), RePC(ImmH), Jp(Cy), Nop],                      /* JP C, a16 */
-  &[Nop],                                                      /* Illegal */
-  &[RePC(ImmL), RePC(ImmH), Call(Cy)],                         /* CALL C, a16 */
-  &[Nop],                                                      /* Illegal */
-  &[RePC(ImmL), Sub(ImmL, true)],                              /* SBC A, n8 */
+  &[Nop, RetIf(Cy), Read(PCL, SP, 1), Read(PCH, SP, 1), Nop], /* RET C */
+  &[Read(PCL, SP, 1), Read(PCH, SP, 1), Nop, SetIE(true)],    /* RETI */
+  &[RePC(ImmL), RePC(ImmH), Jp(Cy), Nop],                     /* JP C, a16 */
+  &[Nop],                                                     /* Illegal */
+  &[RePC(ImmL), RePC(ImmH), Call(Cy)],                        /* CALL C, a16 */
+  &[Nop],                                                     /* Illegal */
+  &[RePC(ImmL), Sub(ImmL, true)],                             /* SBC A, n8 */
   &[Dec16(SP), Write(SP, PCH, -1), Wr0(SP, PCL), SetPC(0x18)], /* RST 18H */
   // 0xE0 series
   &[RePC(ImmL), Write(HiPg(ImmL), A, 0), Nop], /* LDH [a8], A */
@@ -898,7 +920,7 @@ static OP_TABLE: [&[Action]; 256] = [
   &[RePC(ImmL), Read(A, HiPg(ImmL), 0), Nop], /* LDH A, [a8] */
   &[Read(F, SP, 1), Read(A, SP, 1), Nop],     /* POP AF */
   &[Read(A, HiPg(C), 0), Nop],                /* LD A, [C] */
-  &[Nop],                                     /* DI */
+  &[SetIE(false)],                            /* DI */
   &[Nop],                                     /* Illegal */
   &[Dec16(SP), Write(SP, A, -1), Wr0(SP, F), Nop], /* PUSH AF */
   &[RePC(ImmL), Or(ImmL)],                    /* OR n8 */
@@ -906,7 +928,7 @@ static OP_TABLE: [&[Action]; 256] = [
   &[Nop],                                     /* LD HL, SP+e8 */
   &[Move(SPH, H), Move(SPL, L)],              /* LD SP, HL */
   &[RePC(ImmL), RePC(ImmH), Re0(A, Imm), Nop], /* LD A, [a16] */
-  &[Nop],                                     /* EI */
+  &[SetIE(true)],                             /* EI */
   &[Nop],                                     /* Illegal */
   &[Nop],                                     /* Illegal */
   &[RePC(ImmL), Compare(ImmL)],               /* CP n8 */
