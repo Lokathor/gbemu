@@ -1,4 +1,7 @@
-use super::*;
+#![allow(bad_style)]
+
+use gbemu::cpu::SM83;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 struct CpuTestState {

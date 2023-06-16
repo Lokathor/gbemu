@@ -24,7 +24,10 @@ impl MBC1 {
       _ => return Err(()),
     }
     // determine bank counts
-    let rom_bank_count = 1 << raw_rom[0x148];
+    let rom_bank_count = (1 << raw_rom[0x148]).max(2);
+    if rom_bank_count == 0 {
+      return Err(());
+    }
     let ram_bank_count = match raw_rom[0x149] {
       // technically this is "no ram" but we fudge it a bit and always give at
       // least 1 ram bank so that computations elsewhere don't have to worry

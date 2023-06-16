@@ -259,13 +259,11 @@ impl SM83 {
   #[inline]
   pub fn m_cycle(&mut self, bus: &mut impl MemoryBus) {
     let action = self.queue.pop_front().unwrap();
-    println!("Taking Action: {action:?}");
     match action {
       Nop => (),
       Read(r8, r16, i) => {
         let address = self.get_r16(r16);
         let byte = bus.read(address);
-        println!("> bus[{address}] is {byte}");
         self.set_r8(r8, byte);
         let new_address = address.wrapping_add(i16::from(i) as u16);
         self.set_r16(r16, new_address);
@@ -285,7 +283,6 @@ impl SM83 {
       Delta8(r8, i) => {
         let r = self.get_r8(r8);
         let new_r = r.wrapping_add(i as u8);
-        dbg!(r, new_r);
         self.set_r8(r8, new_r);
         self.set_f_zero(new_r == 0);
         self.set_f_sub(i < 0);
@@ -470,7 +467,6 @@ impl SM83 {
       SetIE(enabled) => self.set_irq_enabled(enabled),
       CompleteCB => {
         let imm_l = self.imm_l();
-        println!("imm_l: {imm_l:02X}");
         let val = match imm_l & 0b111 {
           0 => self.b(),
           1 => self.c(),
@@ -486,7 +482,7 @@ impl SM83 {
           _ => unimplemented!(),
         };
         let mut needs_writeback = true;
-        let new_val = match dbg!(imm_l >> 3) {
+        let new_val = match imm_l >> 3 {
           0 => {
             // RLC
             let out = val.rotate_left(1);
