@@ -10,3 +10,13 @@ pub mod mbc1;
 
 const ROM_BANK_SIZE: usize = 16 * 1024;
 const ERAM_BANK_SIZE: usize = 8 * 1024;
+
+#[derive(Debug, Clone)]
+pub struct MMIO {
+  pub raw: [u8; 256],
+}
+impl Default for MMIO {
+  fn default() -> Self {
+    Self { raw: [0_u8; 256] }
+  }
+}

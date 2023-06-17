@@ -25,16 +25,17 @@ pub struct SM83 {
   hl: u16,
   sp: u16,
   pc: u16,
+  ime: bool,
+  // fake
   imm: u16,
   queue: VecDeque<Action>,
-  irq_enabled: bool,
 }
 impl Default for SM83 {
   #[inline]
   fn default() -> Self {
     let mut queue = VecDeque::default();
     queue.extend([Nop].into_iter());
-    Self { af: 0, bc: 0, de: 0, hl: 0, sp: 0, pc: 0, imm: 0, queue, irq_enabled: false }
+    Self { af: 0, bc: 0, de: 0, hl: 0, sp: 0, pc: 0, imm: 0, queue, ime: false }
   }
 }
 // get/set by enum value
@@ -118,12 +119,12 @@ impl SM83 {
     }
   }
   #[inline]
-  pub fn irq_enabled(&self) -> bool {
-    self.irq_enabled
+  pub fn ime(&self) -> bool {
+    self.ime
   }
   #[inline]
-  pub fn set_irq_enabled(&mut self, irq_enabled: bool) {
-    self.irq_enabled = irq_enabled;
+  pub fn set_ime(&mut self, ime: bool) {
+    self.ime = ime;
   }
 }
 // get/set per field
@@ -261,6 +262,12 @@ impl SM83 {
     let action = self.queue.pop_front().unwrap();
     match action {
       Nop => (),
+      Halt => {
+        println!("halted @ 0x{:04X}", self.pc());
+      }
+      Stop => {
+        println!("stopped @ 0x{:04X}", self.pc());
+      }
       Read(r8, r16, i) => {
         let address = self.get_r16(r16);
         let byte = bus.read(address);
@@ -464,13 +471,17 @@ impl SM83 {
           self.queue.clear()
         }
       }
-      QueueIEChange(enabled) => {
+      QueueIMEChange(enabled) => {
         debug_assert!(self.queue.is_empty());
         self.crank_pc(bus);
-        self.queue.extend([ActuallyChangeIE(enabled)]);
+        if let Some(Halt) = self.queue.get(0) {
+          self.set_ime(enabled);
+        } else {
+          self.queue.extend([ActuallyChangeIME(enabled)]);
+        }
       }
-      ActuallyChangeIE(enabled) => {
-        self.set_irq_enabled(enabled);
+      ActuallyChangeIME(enabled) => {
+        self.set_ime(enabled);
         debug_assert!(self.queue.is_empty());
         self.crank_pc(bus);
         self.m_cycle(bus);
@@ -684,6 +695,9 @@ pub enum Action {
   #[default]
   Nop,
 
+  Halt,
+  Stop,
+
   /// `reg8 = *reg16; reg16 += i;`
   ///
   /// Read the address then (wrapping) offset by the delta.
@@ -770,13 +784,14 @@ pub enum Action {
   /// Sets PC to the magic value given.
   SetPC(u8),
 
-  /// Get ready to change IE. However, IE doesn't *actually* change until after
-  /// the next instruction completes.
-  QueueIEChange(bool),
+  /// Get ready to change IME. However, it doesn't *actually* change until after
+  /// the next instruction completes. Unless the next instruction is HALT, in
+  /// which case it happens *before* the next instruction.
+  QueueIMEChange(bool),
 
-  /// Actually change the IE value and then **also** run a normal M cycle (so
-  /// that this action takes "no time").
-  ActuallyChangeIE(bool),
+  /// Actually change the IME value and then also run the next M-cycle **unless*
+  /// the next M-cycle would be HALT.
+  ActuallyChangeIME(bool),
 
   /// Next use ImmL to complete a CB action
   CompleteCB,
@@ -1055,7 +1070,7 @@ static OP_TABLE: [&[Action]; 256] = [
   &[RePC(ImmL), Sub(ImmL, false)],                            /* SUB n8 */
   &[Dec16(SP), Write(SP, PCH, -1), Wr0(SP, PCL), SetPC(0x10)], /* RST 10H */
   &[Nop, RetIf(Cy), Read(PCL, SP, 1), Read(PCH, SP, 1), Nop], /* RET C */
-  &[Read(PCL, SP, 1), Read(PCH, SP, 1), Nop, QueueIEChange(true)], /* RETI */
+  &[Read(PCL, SP, 1), Read(PCH, SP, 1), Nop, QueueIMEChange(true)], /* RETI */
   &[RePC(ImmL), RePC(ImmH), Jp(Cy), Nop],                     /* JP C, a16 */
   &[Nop],                                                     /* Illegal */
   &[RePC(ImmL), RePC(ImmH), Call(Cy)],                        /* CALL C, a16 */
@@ -1083,7 +1098,7 @@ static OP_TABLE: [&[Action]; 256] = [
   &[RePC(ImmL), Read(A, HiPg(ImmL), 0), Nop], /* LDH A, [a8] */
   &[Read(F, SP, 1), Read(A, SP, 1), Nop],     /* POP AF */
   &[Read(A, HiPg(C), 0), Nop],                /* LD A, [C] */
-  &[QueueIEChange(false)],                    /* DI */
+  &[QueueIMEChange(false)],                   /* DI */
   &[Nop],                                     /* Illegal */
   &[Dec16(SP), Write(SP, A, -1), Wr0(SP, F), Nop], /* PUSH AF */
   &[RePC(ImmL), Or(ImmL)],                    /* OR n8 */
@@ -1091,7 +1106,7 @@ static OP_TABLE: [&[Action]; 256] = [
   &[RePC(ImmL), DeltaSPTo(HL), Nop],          /* LD HL, SP+e8 */
   &[Move(SPH, H), Move(SPL, L)],              /* LD SP, HL */
   &[RePC(ImmL), RePC(ImmH), Re0(A, Imm), Nop], /* LD A, [a16] */
-  &[QueueIEChange(true)],                     /* EI */
+  &[QueueIMEChange(true)],                    /* EI */
   &[Nop],                                     /* Illegal */
   &[Nop],                                     /* Illegal */
   &[RePC(ImmL), Compare(ImmL)],               /* CP n8 */

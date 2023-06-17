@@ -1,10 +1,12 @@
 use gbemu::{
   cpu::{MemoryBus, SM83},
   mbc1::MBC1,
+  MMIO,
 };
 
 struct DebugMemoryBus {
   pub mbc: Box<dyn MemoryBus>,
+  pub mmio: MMIO,
   pub other: Vec<u8>,
   pub always_vblank: bool,
   pub out_buf: Vec<u8>,
@@ -15,6 +17,7 @@ impl MemoryBus for DebugMemoryBus {
       0xFF44 if self.always_vblank => 144,
       0x0000..=0x7FFF => self.mbc.read(address),
       0xA000..=0xBFFF => self.mbc.read(address),
+      0xFF00..=0xFFFF => self.mmio.raw[usize::from(address - 0xFF00)],
       _ => self.other.read(address),
     }
   }
@@ -23,6 +26,7 @@ impl MemoryBus for DebugMemoryBus {
     match address {
       0x0000..=0x7FFF => self.mbc.write(address, byte),
       0xA000..=0xBFFF => self.mbc.write(address, byte),
+      0xFF00..=0xFFFF => self.mmio.raw[usize::from(address - 0xFF00)] = byte,
       _ => self.other.write(address, byte),
     };
     if address == 0xFF01 {
@@ -40,6 +44,7 @@ fn run_blargg_test(filename: &str) {
     other: vec![0_u8; 0x1_0000],
     always_vblank: true,
     out_buf: vec![],
+    mmio: MMIO::default(),
   };
   let mut cpu = SM83::default();
   cpu.set_pc(0x100);
