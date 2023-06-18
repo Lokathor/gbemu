@@ -3,6 +3,16 @@ use std::collections::VecDeque;
 pub trait MemoryBus {
   fn read(&self, address: u16) -> u8;
   fn write(&mut self, address: u16, byte: u8);
+
+  fn check_ie_and_if(&self) -> u8 {
+    let ie = self.read(0xFFFF);
+    let if_ = self.read(0xFF0F);
+    ie & if_
+  }
+  fn disable_if_bit(&mut self, bit: u8) {
+    let if_ = self.read(0xFF0F);
+    self.write(0xFF0F, if_ ^ bit);
+  }
 }
 impl MemoryBus for Vec<u8> {
   #[inline]
@@ -15,6 +25,13 @@ impl MemoryBus for Vec<u8> {
       *a = byte;
     }
   }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CpuMode {
+  Normal,
+  Halted,
+  Stopped,
 }
 
 #[derive(Debug, Clone)]
@@ -30,13 +47,26 @@ pub struct SM83 {
   ei_pending: bool,
   imm: u16,
   queue: VecDeque<Action>,
+  log_actions: u32,
 }
 impl Default for SM83 {
   #[inline]
   fn default() -> Self {
-    let mut queue = VecDeque::default();
-    queue.extend([Nop].into_iter());
-    Self { af: 0, bc: 0, de: 0, hl: 0, sp: 0, pc: 0, imm: 0, queue, ime: false, ei_pending: false }
+    let mut queue = VecDeque::with_capacity(8);
+    queue.extend([Nop]);
+    Self {
+      af: 0,
+      bc: 0,
+      de: 0,
+      hl: 0,
+      sp: 0,
+      pc: 0,
+      imm: 0,
+      queue,
+      ime: false,
+      ei_pending: false,
+      log_actions: 0,
+    }
   }
 }
 // get/set by enum value
@@ -259,12 +289,18 @@ impl SM83 {
 
 impl SM83 {
   #[inline]
-  pub fn m_cycle(&mut self, bus: &mut impl MemoryBus) {
+  pub fn m_cycle(&mut self, bus: &mut impl MemoryBus) -> CpuMode {
     let action = self.queue.pop_front().unwrap();
+    if self.log_actions > 0 {
+      println!("PC: ${:04X}, action: {action:?}", self.pc());
+      self.log_actions -= 1;
+    }
     match action {
       Nop => (),
       Halt => {
         println!("halted @ 0x{:04X}", self.pc());
+        self.queue.extend([Nop]);
+        return CpuMode::Halted;
       }
       Stop => {
         println!("stopped @ 0x{:04X}", self.pc());
@@ -454,16 +490,14 @@ impl SM83 {
       MovePC(r16) => self.set_pc(self.get_r16(r16)),
       Call(cond) => {
         if self.is_cond(cond) {
+          // magical simultaneous SP adjustment when the condition holds!
           self.set_sp(self.sp().wrapping_sub(1));
-          self.queue.extend(
-            [
-              // rustfmt don't make this a one-liner
-              Write(SP, PCH, -1),
-              Wr0(SP, PCL),
-              MovePC(Imm),
-            ]
-            .into_iter(),
-          );
+          self.queue.extend([
+            // rustfmt don't make this a one-liner
+            Write(SP, PCH, -1),
+            Wr0(SP, PCL),
+            MovePC(Imm),
+          ]);
         }
       }
       SetPC(u) => self.set_pc(u16::from(u)),
@@ -482,7 +516,7 @@ impl SM83 {
           4 => self.h(),
           5 => self.l(),
           6 => {
-            self.queue.extend([Nop].into_iter());
+            self.queue.extend([Nop]);
             bus.read(self.hl())
           }
           7 => self.a(),
@@ -593,7 +627,7 @@ impl SM83 {
             4 => self.set_h(new_val),
             5 => self.set_l(new_val),
             6 => {
-              self.queue.extend([Nop].into_iter());
+              self.queue.extend([Nop]);
               bus.write(self.hl(), new_val)
             }
             7 => self.set_a(new_val),
@@ -623,23 +657,58 @@ impl SM83 {
         self.crank_pc(bus);
       }
       DisableInterrupts => self.ime = false,
-      RetI => self.ime = true,
+      RetI => {
+        self.ime = true;
+        self.log_actions = 0;
+        println!("irq returned");
+      }
     }
 
     if self.queue.is_empty() {
-      // activate ime if pending
+      // activate ime when we have a pending EI
       self.ime |= self.ei_pending;
       self.ei_pending = false;
-      // crank the program counter
+
+      if self.ime {
+        let irq_bits = bus.check_ie_and_if();
+        if irq_bits != 0 {
+          if irq_bits & (1 << 0) != 0 {
+            bus.disable_if_bit(1 << 0);
+            self.imm = 0x40;
+          }
+          if irq_bits & (1 << 1) != 0 {
+            bus.disable_if_bit(1 << 1);
+            self.imm = 0x48;
+          }
+          if irq_bits & (1 << 2) != 0 {
+            bus.disable_if_bit(1 << 2);
+            self.imm = 0x50;
+          }
+          if irq_bits & (1 << 3) != 0 {
+            bus.disable_if_bit(1 << 3);
+            self.imm = 0x58;
+          }
+          if irq_bits & (1 << 4) != 0 {
+            bus.disable_if_bit(1 << 4);
+            self.imm = 0x60;
+          }
+          self.ime = false;
+          self.queue.extend([Call(Al)]);
+          return CpuMode::Normal;
+        }
+      }
+
+      // crank the program counter for a normal instruction
       self.crank_pc(bus);
     }
     debug_assert!(!self.queue.is_empty());
+    CpuMode::Normal
   }
   #[inline]
   fn crank_pc(&mut self, bus: &mut impl MemoryBus) {
     let address = self.pc;
     let op = bus.read(address);
-    let actions = OP_TABLE.get(usize::from(op)).copied().unwrap_or(&[Nop]);
+    let actions = OP_TABLE[usize::from(op)];
     debug_assert!(!actions.is_empty());
     self.queue.extend(actions.iter().copied());
     self.pc = self.pc.wrapping_add(1);
@@ -852,7 +921,7 @@ static OP_TABLE: [&[Action]; 256] = [
   &[RePC(C), Nop],                                                /* LD C, n8 */
   &[RotateCyClearZ(false)],                                       /* RRCA */
   // 0x10 series
-  &[Nop /* GBC Only (kinda) */], /* STOP */
+  &[Stop],                       /* STOP */
   &[RePC(E), RePC(D), Nop],      /* LD DE, n16 */
   &[Wr0(DE, A), Nop],            /* LD [DE], A */
   &[Inc16(DE), Nop],             /* INC DE */
@@ -960,7 +1029,7 @@ static OP_TABLE: [&[Action]; 256] = [
   &[Write(HL, E, 0), Nop],         /* LD [HL], E */
   &[Write(HL, H, 0), Nop],         /* LD [HL], H */
   &[Write(HL, L, 0), Nop],         /* LD [HL], L */
-  &[Nop],                          /* HALT */
+  &[Halt],                         /* HALT */
   &[Write(HL, A, 0), Nop],         /* LD [HL], A */
   &[Move(A, B)],                   /* LD A, B */
   &[Move(A, C)],                   /* LD A, C */

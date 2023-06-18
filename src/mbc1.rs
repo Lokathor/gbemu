@@ -1,8 +1,8 @@
-use crate::{cpu::MemoryBus, ERAM_BANK_SIZE, ROM_BANK_SIZE};
+use crate::{cpu::MemoryBus, ROM_BANK_SIZE, SRAM_BANK_SIZE};
 
 pub struct MBC1 {
   rom_banks: Vec<[u8; ROM_BANK_SIZE]>,
-  ram_banks: Vec<[u8; ERAM_BANK_SIZE]>,
+  ram_banks: Vec<[u8; SRAM_BANK_SIZE]>,
   low5_bits: u8,
   upper2_bits: u8,
   ram_active: bool,
@@ -49,10 +49,10 @@ impl MBC1 {
       .iter_mut()
       .zip(raw_rom.chunks(ROM_BANK_SIZE))
       .for_each(|(b, r)| b[..r.len()].copy_from_slice(r));
-    let mut ram_banks = vec![[0u8; ERAM_BANK_SIZE]; ram_bank_count];
+    let mut ram_banks = vec![[0u8; SRAM_BANK_SIZE]; ram_bank_count];
     ram_banks
       .iter_mut()
-      .zip(raw_ram.unwrap_or(&[]).chunks(ERAM_BANK_SIZE))
+      .zip(raw_ram.unwrap_or(&[]).chunks(SRAM_BANK_SIZE))
       .for_each(|(b, r)| b[..r.len()].copy_from_slice(r));
     // complete
     Ok(Self {

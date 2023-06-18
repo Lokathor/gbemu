@@ -5,7 +5,7 @@ edition = "2021"
 license = "Zlib OR Apache-2.0 OR MIT"
 
 [dependencies]
-bytemuck = "1"
+bytemuck = { version ="1", features=["derive", "min_const_generics", "extern_crate_alloc"]}
 bitfrob = "1"
 
 [dev-dependencies]

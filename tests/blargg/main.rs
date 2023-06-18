@@ -1,78 +1,39 @@
 use gbemu::{
-  cpu::{MemoryBus, SM83},
+  cpu::{CpuMode, MemoryBus, SM83},
   mbc1::MBC1,
-  MMIO,
+  ExternParts,
 };
-
-struct DebugMemoryBus {
-  pub mbc: Box<dyn MemoryBus>,
-  pub mmio: MMIO,
-  pub other: Vec<u8>,
-  pub always_vblank: bool,
-  pub out_buf: Vec<u8>,
-}
-impl MemoryBus for DebugMemoryBus {
-  fn read(&self, address: u16) -> u8 {
-    match address {
-      0xFF44 if self.always_vblank => 144,
-      0x0000..=0x7FFF => self.mbc.read(address),
-      0xA000..=0xBFFF => self.mbc.read(address),
-      0xFF00..=0xFFFF => {
-        let out = self.mmio.raw[usize::from(address - 0xFF00)];
-        if address == 0xFF0F {
-          println!("Reading ${address:04X}, got 0b{out:08b}");
-        }
-        out
-      }
-      _ => self.other.read(address),
-    }
-  }
-
-  fn write(&mut self, address: u16, byte: u8) {
-    match address {
-      0x0000..=0x7FFF => self.mbc.write(address, byte),
-      0xA000..=0xBFFF => self.mbc.write(address, byte),
-      0xFF00..=0xFFFF => self.mmio.raw[usize::from(address - 0xFF00)] = byte,
-      _ => self.other.write(address, byte),
-    };
-    match address {
-      0xFF01 => self.out_buf.push(byte),
-      0xFF02 => (), // serial control
-      0xFF05 => println!("TIMA(counter)={byte:08b}"),
-      0xFF06 => println!("TMA(mod)={byte:08b}"),
-      0xFF07 => println!("TAC(control)={byte:08b}"),
-      0xFF0F => println!("IF={byte:08b}"),
-      0xFF24 => println!("NR50(main volume)={byte:08b}"),
-      0xFF25 => println!("NR51(sound panning)={byte:08b}"),
-      0xFF26 => println!("NR52(sound on/off)={byte:08b}"),
-      0xFF40 => println!("LCDC={byte:08b}"),
-      0xFF42 => println!("SCY={byte:08b}"),
-      0xFF43 => println!("SCX={byte:08b}"),
-      0xFF47 => println!("BGP={byte:08b}"),
-      0xFFFF => println!("IE={byte:08b}"),
-      0xFF00..=0xFF7F => println!("${address:04X}={byte:08b}"),
-      _ => (),
-    }
-  }
-}
 
 fn run_blargg_test(filename: &str) {
   let file_bytes = std::fs::read(filename).unwrap();
   assert_eq!(file_bytes[0x147], 0x01);
   let mbc1 = MBC1::new(&file_bytes, None).unwrap();
-  let mut bus = DebugMemoryBus {
-    mbc: Box::new(mbc1),
-    other: vec![0_u8; 0x1_0000],
-    always_vblank: true,
-    out_buf: vec![],
-    mmio: MMIO::default(),
-  };
+  let mut parts = ExternParts::from_cart(Box::new(mbc1));
+  parts.serial_log = Some(vec![]);
   let mut cpu = SM83::default();
   cpu.set_pc(0x100);
+  let mut cpu_mode = CpuMode::Normal;
   for _ in 0..20_000_000 {
-    cpu.m_cycle(&mut bus);
+    parts.m_cycle();
+    match cpu_mode {
+      CpuMode::Normal => cpu_mode = cpu.m_cycle(&mut parts),
+      CpuMode::Halted => {
+        // wake up only once an interrupt is ready
+        if cpu.ime() && parts.check_ie_and_if() != 0 {
+          cpu_mode = cpu.m_cycle(&mut parts)
+        }
+      }
+      CpuMode::Stopped => todo!(),
+    }
+    #[cfg(FALSE)]
+    if cpu_mode != CpuMode::Normal && (!cpu.ime() || parts.read(0xFF0F) == 0) {
+      // If we halt or stop and an interrupt can't be triggered then we've
+      // locked the CPU forever. The test shouldn't ever do this, so it's time
+      // to panic.
+      panic!("system locked with IME off and cpu_mode={cpu_mode:?}");
+    }
   }
-  let msg = core::str::from_utf8(&bus.out_buf).unwrap();
+  let msg = core::str::from_utf8(parts.serial_log.as_deref().unwrap_or_default()).unwrap();
   if !msg.contains("Passed") {
     panic!("{msg}");
   }
