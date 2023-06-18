@@ -34,14 +34,6 @@ fn do_json_test(file: &str) {
   //
   for case in cases {
     println!("Test Case: `{}`", case.name);
-    if case.initial.ime != case.r#final.ime {
-      // TODO: handle IME tests
-      return;
-    }
-    if case.initial.ei != case.r#final.ei {
-      // TODO: handle EI tests
-      return;
-    }
 
     // Initialize The State.
     let mut ram = vec![0_u8; 0x1_0000];
@@ -56,6 +48,7 @@ fn do_json_test(file: &str) {
     cpu.set_l(case.initial.l);
     cpu.set_pc(case.initial.pc);
     cpu.set_sp(case.initial.sp);
+    cpu.set_ime(case.initial.ime != 0);
     for (k, v) in case.initial.ram.iter().copied() {
       ram[usize::from(k)] = v;
     }
@@ -83,6 +76,7 @@ fn do_json_test(file: &str) {
     assert_eq!(cpu.l(), case.r#final.l, "l");
     assert_eq!(cpu.pc().wrapping_sub(1), case.r#final.pc, "pc"); // fudge!
     assert_eq!(cpu.sp(), case.r#final.sp, "sp");
+    assert_eq!(cpu.ime(), case.r#final.ime != 0, "ime");
     for (k, v) in case.r#final.ram.iter().copied() {
       assert_eq!(ram[k as usize], v, "ram");
     }

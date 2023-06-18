@@ -17,7 +17,13 @@ impl MemoryBus for DebugMemoryBus {
       0xFF44 if self.always_vblank => 144,
       0x0000..=0x7FFF => self.mbc.read(address),
       0xA000..=0xBFFF => self.mbc.read(address),
-      0xFF00..=0xFFFF => self.mmio.raw[usize::from(address - 0xFF00)],
+      0xFF00..=0xFFFF => {
+        let out = self.mmio.raw[usize::from(address - 0xFF00)];
+        if address == 0xFF0F {
+          println!("Reading ${address:04X}, got 0b{out:08b}");
+        }
+        out
+      }
       _ => self.other.read(address),
     }
   }
@@ -29,8 +35,23 @@ impl MemoryBus for DebugMemoryBus {
       0xFF00..=0xFFFF => self.mmio.raw[usize::from(address - 0xFF00)] = byte,
       _ => self.other.write(address, byte),
     };
-    if address == 0xFF01 {
-      self.out_buf.push(byte);
+    match address {
+      0xFF01 => self.out_buf.push(byte),
+      0xFF02 => (), // serial control
+      0xFF05 => println!("TIMA(counter)={byte:08b}"),
+      0xFF06 => println!("TMA(mod)={byte:08b}"),
+      0xFF07 => println!("TAC(control)={byte:08b}"),
+      0xFF0F => println!("IF={byte:08b}"),
+      0xFF24 => println!("NR50(main volume)={byte:08b}"),
+      0xFF25 => println!("NR51(sound panning)={byte:08b}"),
+      0xFF26 => println!("NR52(sound on/off)={byte:08b}"),
+      0xFF40 => println!("LCDC={byte:08b}"),
+      0xFF42 => println!("SCY={byte:08b}"),
+      0xFF43 => println!("SCX={byte:08b}"),
+      0xFF47 => println!("BGP={byte:08b}"),
+      0xFFFF => println!("IE={byte:08b}"),
+      0xFF00..=0xFF7F => println!("${address:04X}={byte:08b}"),
+      _ => (),
     }
   }
 }

@@ -16,6 +16,7 @@ pub struct MMIO {
   pub raw: [u8; 256],
 }
 impl Default for MMIO {
+  #[inline]
   fn default() -> Self {
     Self { raw: [0_u8; 256] }
   }

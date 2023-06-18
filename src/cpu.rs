@@ -27,6 +27,7 @@ pub struct SM83 {
   pc: u16,
   ime: bool,
   // fake
+  ei_pending: bool,
   imm: u16,
   queue: VecDeque<Action>,
 }
@@ -35,7 +36,7 @@ impl Default for SM83 {
   fn default() -> Self {
     let mut queue = VecDeque::default();
     queue.extend([Nop].into_iter());
-    Self { af: 0, bc: 0, de: 0, hl: 0, sp: 0, pc: 0, imm: 0, queue, ime: false }
+    Self { af: 0, bc: 0, de: 0, hl: 0, sp: 0, pc: 0, imm: 0, queue, ime: false, ei_pending: false }
   }
 }
 // get/set by enum value
@@ -471,21 +472,6 @@ impl SM83 {
           self.queue.clear()
         }
       }
-      QueueIMEChange(enabled) => {
-        debug_assert!(self.queue.is_empty());
-        self.crank_pc(bus);
-        if let Some(Halt) = self.queue.get(0) {
-          self.set_ime(enabled);
-        } else {
-          self.queue.extend([ActuallyChangeIME(enabled)]);
-        }
-      }
-      ActuallyChangeIME(enabled) => {
-        self.set_ime(enabled);
-        debug_assert!(self.queue.is_empty());
-        self.crank_pc(bus);
-        self.m_cycle(bus);
-      }
       CompleteCB => {
         let imm_l = self.imm_l();
         let val = match imm_l & 0b111 {
@@ -628,9 +614,23 @@ impl SM83 {
         self.set_f_half(spl & 0xF > out & 0xF);
         self.set_f_carry(out < spl);
       }
+      EnableInterrupts => {
+        // set the pending status so that IME comes on *after* the next instruction.
+        self.ei_pending = true;
+        // crank PC here without triggering the pending status like would happen
+        // after the action completes if the queue were empty.
+        debug_assert!(self.queue.is_empty());
+        self.crank_pc(bus);
+      }
+      DisableInterrupts => self.ime = false,
+      RetI => self.ime = true,
     }
 
     if self.queue.is_empty() {
+      // activate ime if pending
+      self.ime |= self.ei_pending;
+      self.ei_pending = false;
+      // crank the program counter
       self.crank_pc(bus);
     }
     debug_assert!(!self.queue.is_empty());
@@ -784,20 +784,15 @@ pub enum Action {
   /// Sets PC to the magic value given.
   SetPC(u8),
 
-  /// Get ready to change IME. However, it doesn't *actually* change until after
-  /// the next instruction completes. Unless the next instruction is HALT, in
-  /// which case it happens *before* the next instruction.
-  QueueIMEChange(bool),
-
-  /// Actually change the IME value and then also run the next M-cycle **unless*
-  /// the next M-cycle would be HALT.
-  ActuallyChangeIME(bool),
-
   /// Next use ImmL to complete a CB action
   CompleteCB,
 
   /// (0 0 H C)
   DeltaSPTo(Reg16),
+
+  EnableInterrupts,
+  DisableInterrupts,
+  RetI,
 }
 use bitfrob::{u8_get_bit, u8_with_bit};
 use Action::*;
@@ -1070,7 +1065,7 @@ static OP_TABLE: [&[Action]; 256] = [
   &[RePC(ImmL), Sub(ImmL, false)],                            /* SUB n8 */
   &[Dec16(SP), Write(SP, PCH, -1), Wr0(SP, PCL), SetPC(0x10)], /* RST 10H */
   &[Nop, RetIf(Cy), Read(PCL, SP, 1), Read(PCH, SP, 1), Nop], /* RET C */
-  &[Read(PCL, SP, 1), Read(PCH, SP, 1), Nop, QueueIMEChange(true)], /* RETI */
+  &[Read(PCL, SP, 1), Read(PCH, SP, 1), Nop, RetI],           /* RETI */
   &[RePC(ImmL), RePC(ImmH), Jp(Cy), Nop],                     /* JP C, a16 */
   &[Nop],                                                     /* Illegal */
   &[RePC(ImmL), RePC(ImmH), Call(Cy)],                        /* CALL C, a16 */
@@ -1098,7 +1093,7 @@ static OP_TABLE: [&[Action]; 256] = [
   &[RePC(ImmL), Read(A, HiPg(ImmL), 0), Nop], /* LDH A, [a8] */
   &[Read(F, SP, 1), Read(A, SP, 1), Nop],     /* POP AF */
   &[Read(A, HiPg(C), 0), Nop],                /* LD A, [C] */
-  &[QueueIMEChange(false)],                   /* DI */
+  &[DisableInterrupts],                       /* DI */
   &[Nop],                                     /* Illegal */
   &[Dec16(SP), Write(SP, A, -1), Wr0(SP, F), Nop], /* PUSH AF */
   &[RePC(ImmL), Or(ImmL)],                    /* OR n8 */
@@ -1106,7 +1101,7 @@ static OP_TABLE: [&[Action]; 256] = [
   &[RePC(ImmL), DeltaSPTo(HL), Nop],          /* LD HL, SP+e8 */
   &[Move(SPH, H), Move(SPL, L)],              /* LD SP, HL */
   &[RePC(ImmL), RePC(ImmH), Re0(A, Imm), Nop], /* LD A, [a16] */
-  &[QueueIMEChange(true)],                    /* EI */
+  &[EnableInterrupts],                        /* EI */
   &[Nop],                                     /* Illegal */
   &[Nop],                                     /* Illegal */
   &[RePC(ImmL), Compare(ImmL)],               /* CP n8 */
