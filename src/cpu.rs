@@ -7,7 +7,7 @@ pub trait MemoryBus {
   fn check_ie_and_if(&self) -> u8 {
     let ie = self.read(0xFFFF);
     let if_ = self.read(0xFF0F);
-    ie & if_
+    ie & if_ & 0x1F
   }
   fn disable_if_bit(&mut self, bit: u8) {
     let if_ = self.read(0xFF0F);

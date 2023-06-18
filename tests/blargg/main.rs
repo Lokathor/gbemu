@@ -19,7 +19,7 @@ fn run_blargg_test(filename: &str) {
       CpuMode::Normal => cpu_mode = cpu.m_cycle(&mut parts),
       CpuMode::Halted => {
         // wake up only once an interrupt is ready
-        if cpu.ime() && parts.check_ie_and_if() != 0 {
+        if parts.check_ie_and_if() != 0 {
           cpu_mode = cpu.m_cycle(&mut parts)
         }
       }
