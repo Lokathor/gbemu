@@ -1,20 +1,31 @@
+use core::num::Wrapping;
+
 use crate::{
   button_state::ButtonState,
-  cpu::{CpuMode, MemoryBus, SM83},
-  extern_parts::ExternParts,
+  cpu::{CpuMode, CpuView, SM83},
+  ppu::PPU,
+  spare_parts::SpareParts,
 };
 
 pub struct System {
   cpu: SM83,
   cpu_mode: CpuMode,
-  parts: ExternParts,
+  ppu: PPU,
+  parts: SpareParts,
+  t_clock: usize,
 }
 impl System {
   #[inline]
-  pub fn from_cart(cart: Box<dyn MemoryBus>) -> Self {
+  pub fn from_cart(cart: Box<dyn CpuView>) -> Self {
     let mut cpu = SM83::default();
     cpu.set_pc(0x100);
-    Self { cpu, cpu_mode: CpuMode::Normal, parts: ExternParts::from_cart(cart) }
+    Self {
+      cpu,
+      cpu_mode: CpuMode::Normal,
+      ppu: PPU::default(),
+      parts: SpareParts::from_cart(cart),
+      t_clock: 0,
+    }
   }
 
   #[inline]
@@ -32,17 +43,36 @@ impl System {
   }
 
   #[inline]
-  pub fn m_cycle(&mut self) {
-    self.parts.m_cycle();
-    match self.cpu_mode {
-      CpuMode::Normal => self.cpu_mode = self.cpu.m_cycle(&mut self.parts),
-      CpuMode::Halted => {
-        // wake up only once an interrupt is ready
-        if self.parts.check_pending_irqs() != 0 {
-          self.cpu_mode = self.cpu.m_cycle(&mut self.parts)
+  pub fn t_cycle(&mut self) {
+    self.t_clock = self.t_clock.wrapping_add(1);
+    self.ppu.t_cycle();
+    //
+    if self.t_clock & 0b11 == 0 {
+      self.parts.mmio_mut().set_ly(self.ppu.current_scanline());
+      self.parts.m_cycle();
+      match self.cpu_mode {
+        CpuMode::Normal => self.cpu_mode = self.cpu.m_cycle(&mut self.parts),
+        CpuMode::Halted => {
+          // wake up only once an interrupt is ready
+          if self.parts.check_pending_irqs() != 0 {
+            self.cpu_mode = self.cpu.m_cycle(&mut self.parts)
+          }
+        }
+        CpuMode::Stopped => {
+          // wake when any of the low 4 bits of `JOYP` become zero, regardless
+          // of interrupt settings.
+          if self.parts.mmio().joyp() & 0b1111 != 0 {
+            self.cpu_mode = self.cpu.m_cycle(&mut self.parts)
+          }
         }
       }
-      CpuMode::Stopped => todo!(),
     }
+  }
+  #[inline]
+  pub fn m_cycle(&mut self) {
+    self.t_cycle();
+    self.t_cycle();
+    self.t_cycle();
+    self.t_cycle();
   }
 }

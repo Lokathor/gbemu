@@ -1,4 +1,7 @@
-use crate::{cpu::MemoryBus, ROM_BANK_SIZE, SRAM_BANK_SIZE};
+use crate::{
+  cpu::CpuView,
+  spare_parts::{ROM_BANK_SIZE, SRAM_BANK_SIZE},
+};
 
 pub struct MBC1 {
   rom_banks: Vec<[u8; ROM_BANK_SIZE]>,
@@ -94,7 +97,7 @@ impl MBC1 {
     }
   }
 }
-impl MemoryBus for MBC1 {
+impl CpuView for MBC1 {
   #[inline]
   fn read(&self, address: u16) -> u8 {
     match address {

@@ -1,27 +1,34 @@
+use core::ops::Range;
+
 use crate::{
   button_state::ButtonState,
-  cpu::MemoryBus,
+  cpu::CpuView,
   mmio::{SerialControl, TimerControl, MMIO},
-  OamEntry, VRAM_BANK_SIZE, WRAM_BANK_SIZE,
+  ppu::OamEntry,
 };
 
+pub const ROM_BANK_SIZE: usize = 16 * 1024;
+pub const SRAM_BANK_SIZE: usize = 8 * 1024;
+pub const VRAM_BANK_SIZE: usize = 8 * 1024;
+pub const WRAM_BANK_SIZE: usize = 4 * 1024;
+
 /// Parts of the system that are external to the CPU.
-pub struct ExternParts {
+pub struct SpareParts {
   /// Any ROM and SRAM accesses pass through to here.
-  pub cart: Box<dyn MemoryBus>,
+  cart: Box<dyn CpuView>,
   /// Video RAM (one slot visible)
-  pub vram: Box<[[u8; VRAM_BANK_SIZE]; 2]>,
-  pub vram_bank: usize,
+  vram: Box<[[u8; VRAM_BANK_SIZE]; 2]>,
+  vram_bank: usize,
   /// Work RAM (always zero, plus one other slot visible)
-  pub wram: Box<[[u8; WRAM_BANK_SIZE]; 8]>,
-  pub wram_bank: usize,
+  wram: Box<[[u8; WRAM_BANK_SIZE]; 8]>,
+  wram_bank: usize,
   /// Object Attributes
-  pub oam: [OamEntry; 40],
+  oam: [OamEntry; 40],
   /// IO controls and high page ram
-  pub mmio: MMIO,
+  mmio: MMIO,
 }
-impl ExternParts {
-  pub fn from_cart(cart: Box<dyn MemoryBus>) -> Self {
+impl SpareParts {
+  pub fn from_cart(cart: Box<dyn CpuView>) -> Self {
     Self {
       cart,
       vram: bytemuck::allocation::zeroed_box(),
@@ -50,8 +57,16 @@ impl ExternParts {
   pub fn m_cycle(&mut self) {
     self.mmio.m_cycle();
   }
+  #[inline]
+  pub fn mmio(&self) -> &MMIO {
+    &self.mmio
+  }
+  #[inline]
+  pub fn mmio_mut(&mut self) -> &mut MMIO {
+    &mut self.mmio
+  }
 }
-impl MemoryBus for ExternParts {
+impl CpuView for SpareParts {
   #[inline]
   #[must_use]
   fn read(&self, address: u16) -> u8 {
@@ -114,4 +129,14 @@ impl MemoryBus for ExternParts {
       _ => (),
     }
   }
+}
+
+#[derive(Debug, Clone, Copy)]
+#[repr(u8)]
+pub enum IrqTy {
+  VBlank = 0,
+  LCDSTAT = 1,
+  Timer = 2,
+  Serial = 3,
+  Joypad = 4,
 }

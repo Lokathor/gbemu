@@ -1,6 +1,6 @@
-use bitfrob::u8_get_bit;
+use bitfrob::{u8_get_bit, u8_with_bit, u8_with_value};
 
-use crate::{button_state::ButtonState, IrqTy};
+use crate::{button_state::ButtonState, ppu::PpuMode, spare_parts::IrqTy};
 
 #[derive(Debug, Clone)]
 pub struct MMIO {
@@ -30,10 +30,15 @@ impl MMIO {
   pub const TMA: usize = 0x06;
   pub const TAC: usize = 0x07;
   pub const IF: usize = 0x0F;
+  pub const STAT: usize = 0x41;
+  pub const LY: usize = 0x44;
+  pub const LYC: usize = 0x45;
 
+  #[inline]
   pub fn read(&self, index: u8) -> u8 {
     self.bytes[usize::from(index)]
   }
+  #[inline]
   pub fn write(&mut self, index: u8, byte: u8) {
     match usize::from(index) {
       MMIO::JOYP => {
@@ -51,13 +56,14 @@ impl MMIO {
         }
         self.bytes[Self::SC] = byte;
       }
+      MMIO::STAT => {
+        // bits 0..=2 are read-only to the CPU.
+        let old_stat = self.bytes[Self::STAT];
+        let fixed_stat = u8_with_value(0, 2, byte, old_stat);
+        self.bytes[MMIO::STAT] = fixed_stat;
+      }
       other => self.bytes[other] = byte,
     }
-  }
-
-  #[inline]
-  pub fn set_button_state(&mut self, button_state: ButtonState) {
-    self.button_state = button_state;
   }
   #[inline]
   pub fn set_serial_logging(&mut self, log: bool) {
@@ -72,6 +78,35 @@ impl MMIO {
     self.serial_log.as_deref().unwrap_or_default()
   }
 
+  #[inline]
+  pub fn set_button_state(&mut self, button_state: ButtonState) {
+    let old_joyp = self.joyp() & 0b1111;
+    self.button_state = button_state;
+    // flag an interrupt if any of the low 4 bits were *not* clear and now they
+    // *are* clear.
+    let new_joyp = self.joyp() & 0b1111;
+    let diff_joyp = (old_joyp ^ new_joyp) & 0b1111;
+    if diff_joyp != 0 && new_joyp != 0 {
+      self.flag_interrupt(IrqTy::Joypad);
+    }
+  }
+  #[inline]
+  pub fn set_ly(&mut self, byte: u8) {
+    // flag interrupt when we first get to line 144
+    if byte == 144 && self.bytes[Self::LY] < 144 {
+      self.flag_interrupt(IrqTy::VBlank);
+    }
+    // always keep the lyc match bit accurate.
+    self.bytes[Self::STAT] = u8_with_bit(2, self.bytes[Self::STAT], byte == self.lyc());
+    self.bytes[Self::LY] = byte;
+  }
+  #[inline]
+  pub fn set_ppu_mode(&mut self, mode: PpuMode) {
+    self.bytes[Self::STAT] = u8_with_value(0, 1, self.bytes[Self::STAT], mode as u8);
+    // TODO: trigger STAT interrupts... somehow?
+  }
+
+  #[inline]
   pub fn m_cycle(&mut self) {
     let tac = self.tac();
     // if timer enabled
@@ -82,44 +117,49 @@ impl MMIO {
         self.timer_sub_ticks = tac.sub_ticks();
         let (new, overflow) = self.tima().overflowing_add(1);
         if overflow {
-          self.set_tima(self.tma());
+          self.bytes[Self::TIMA] = self.tma();
           self.flag_interrupt(IrqTy::Timer);
         } else {
-          self.set_tima(new);
+          self.bytes[Self::TIMA] = new;
         }
       }
     }
   }
 
+  #[inline]
   pub fn joyp(&self) -> u8 {
     self.read(Self::JOYP as u8)
   }
+  #[inline]
   pub fn sb(&self) -> u8 {
     self.read(Self::SB as u8)
   }
+  #[inline]
   pub fn sc(&self) -> u8 {
     self.read(Self::SC as u8)
   }
+  #[inline]
   pub fn tima(&self) -> u8 {
     self.read(Self::TIMA as u8)
   }
+  #[inline]
   pub fn tma(&self) -> u8 {
     self.read(Self::TMA as u8)
   }
+  #[inline]
   pub fn tac(&self) -> TimerControl {
     TimerControl(self.read(Self::TAC as u8))
   }
+  #[inline]
   pub fn if_(&self) -> u8 {
     self.read(Self::IF as u8)
   }
-
-  pub fn set_tima(&mut self, byte: u8) {
-    self.write(Self::TIMA as u8, byte)
-  }
-  pub fn set_sc(&mut self, sc: SerialControl) {
-    self.write(Self::SC as u8, sc.0)
+  #[inline]
+  pub fn lyc(&self) -> u8 {
+    self.read(Self::LYC as u8)
   }
 
+  #[inline]
   pub fn flag_interrupt(&mut self, ty: IrqTy) {
     self.bytes[Self::IF] |= 1 << (ty as u8);
   }

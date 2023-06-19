@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-pub trait MemoryBus {
+pub trait CpuView {
   fn read(&self, address: u16) -> u8;
   fn write(&mut self, address: u16, byte: u8);
 
@@ -14,7 +14,7 @@ pub trait MemoryBus {
     self.write(0xFF0F, if_ ^ bit);
   }
 }
-impl MemoryBus for Vec<u8> {
+impl CpuView for Vec<u8> {
   #[inline]
   fn read(&self, address: u16) -> u8 {
     self.get(usize::from(address)).copied().unwrap_or(0)
@@ -290,7 +290,7 @@ impl SM83 {
 
 impl SM83 {
   #[inline]
-  pub fn m_cycle(&mut self, bus: &mut impl MemoryBus) -> CpuMode {
+  pub fn m_cycle(&mut self, bus: &mut impl CpuView) -> CpuMode {
     let action = self.queue.pop_front().unwrap();
     if self.log_actions > 0 {
       println!("PC: ${:04X}, action: {action:?}", self.pc());
@@ -706,7 +706,7 @@ impl SM83 {
     CpuMode::Normal
   }
   #[inline]
-  fn crank_pc(&mut self, bus: &mut impl MemoryBus) {
+  fn crank_pc(&mut self, bus: &mut impl CpuView) {
     let address = self.pc;
     let op = bus.read(address);
     let actions = OP_TABLE[usize::from(op)];
