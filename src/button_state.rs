@@ -63,14 +63,19 @@ impl ButtonState {
   /// Converts the emulated button state into a `JOYP` value based on the two
   /// selection bits.
   pub const fn to_joyp(self, action: bool, direction: bool) -> u8 {
-    let mut out = 0b11_1111;
+    let mut out = 0b1111;
+    // llvm plz be smarter than me and make this bit math fast
     if action {
-      out &= 1 << 5;
       out &= self.0 >> 4;
     }
     if direction {
-      out &= 1 << 4;
       out &= self.0;
+    }
+    if !action {
+      out |= 1 << 5;
+    }
+    if !direction {
+      out |= 1 << 4;
     }
     out
   }
