@@ -4,7 +4,7 @@ pub trait MemoryBus {
   fn read(&self, address: u16) -> u8;
   fn write(&mut self, address: u16, byte: u8);
 
-  fn check_ie_and_if(&self) -> u8 {
+  fn check_pending_irqs(&self) -> u8 {
     let ie = self.read(0xFFFF);
     let if_ = self.read(0xFF0F);
     ie & if_ & 0x1F
@@ -27,8 +27,9 @@ impl MemoryBus for Vec<u8> {
   }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CpuMode {
+  #[default]
   Normal,
   Halted,
   Stopped,
@@ -670,7 +671,7 @@ impl SM83 {
       self.ei_pending = false;
 
       if self.ime {
-        let irq_bits = bus.check_ie_and_if();
+        let irq_bits = bus.check_pending_irqs();
         if irq_bits != 0 {
           if irq_bits & (1 << 0) != 0 {
             bus.disable_if_bit(1 << 0);
