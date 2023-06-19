@@ -16,7 +16,7 @@ impl Default for MMIO {
       bytes: [0_u8; 256],
       button_state: Default::default(),
       serial_log: None,
-      timer_sub_ticks: 0,
+      timer_sub_ticks: TimerControl(0).sub_ticks(),
     };
     out.write(MMIO::JOYP as _, 0_u8);
     out
@@ -50,10 +50,6 @@ impl MMIO {
           }
         }
         self.bytes[Self::SC] = byte;
-      }
-      MMIO::TAC => {
-        self.timer_sub_ticks = self.tac().sub_ticks();
-        self.bytes[Self::TAC] = byte;
       }
       other => self.bytes[other] = byte,
     }
