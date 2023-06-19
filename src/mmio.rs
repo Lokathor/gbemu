@@ -158,6 +158,10 @@ impl MMIO {
   pub fn lyc(&self) -> u8 {
     self.read(Self::LYC as u8)
   }
+  #[inline]
+  pub fn ly(&self) -> u8 {
+    self.read(Self::LY as u8)
+  }
 
   #[inline]
   pub fn flag_interrupt(&mut self, ty: IrqTy) {

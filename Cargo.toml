@@ -7,6 +7,8 @@ license = "Zlib OR Apache-2.0 OR MIT"
 [dependencies]
 bytemuck = { version ="1", features=["derive", "min_const_generics", "extern_crate_alloc"]}
 bitfrob = "1"
+beryllium = "0.13.0"
+pixel_formats = "0.1.5"
 
 [dev-dependencies]
 serde = { version = "1", features = ["derive"] }
